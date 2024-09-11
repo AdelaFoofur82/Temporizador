@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 
@@ -41,18 +40,92 @@
 
         #fullscreen {
             text-decoration: none;
-            color: black;
         }
 
         .fixed-width {
             width: calc(100% / 6);
             /* Divide 100% by the number of buttons */
         }
+
+        a {
+            color: #000000;
+        }
+
+        .dark-mode a {
+            color: #ffffff;
+        }
+
+        .dark-mode {
+            background-color: #121212;
+            color: #ffffff;
+        }
+
+        .dark-mode .progress-bar {
+            background-color: #424242;
+        }
+
+        .dark-mode a {
+            color: #ffffff;
+        }
+
+        .dark-mode .sound-marker {
+            background-color: #ff0000;
+        }
+
+        .dark-mode .form-control {
+            background-color: #424242;
+            color: #ffffff;
+        }
+
+        .dark-mode .btn {
+            background-color: #424242;
+            color: #ffffff;
+        }
+
+        .dark-mode .btn-secondary {
+            background-color: #424242;
+            color: #ffffff;
+        }
+
+        .dark-mode .btn-secondary:hover {
+            background-color: #424242;
+            color: #ffffff;
+        }
+
+        .dark-mode .btn-secondary:focus {
+            background-color: #424242;
+            color: #ffffff;
+        }
+
+        .dark-mode .btn-secondary:active {
+            background-color: #424242;
+            color: #ffffff;
+        }
+
+        .dark-mode .btn-secondary.active {
+            background-color: #424242;
+            color: #ffffff;
+        }
+
+        .dark-mode .btn-secondary.disabled {
+            background-color: #424242;
+            color: #ffffff;
+        }
+
+        .dark-mode .btn-secondary:disabled {
+            background-color: #424242;
+            color: #ffffff;
+        }
+
+        .dark-mode .btn-secondary:not(:disabled):not(.disabled).active {
+            background-color: #424242;
+            color: #ffffff;
+        }
     </style>
 </head>
 
 <body>
-    <div class="container">
+    <div class="container" id="main">
         <h1><a href="#" id="fullscreen" title="Pantalla completa">⛶</a> Temporizador</h1>
         <div class="row">
             <div class="col-md-6 col-sm-12">
@@ -74,17 +147,19 @@
                         <option value="">Sin Sonido</option>
                         <option value="rsc/dim.mp3" selected>Handpan Dim</option>
                         <option value="rsc/gong.wav">Gong</option>
-        <option value="rsc/tibetan.wav">Cuenco tibetano</option>
-			<option value="custom">Personalizado (Ingrese una URL)</option>
+                        <option value="rsc/tibetan.wav">Cuenco tibetano</option>
+                        <option value="custom">Personalizado (Ingrese una URL)</option>
                     </select>
-                    <input type="text" class="form-control" id="url_sonido"
-                        value="rsc/gong.wav"
+                    <input type="text" class="form-control" id="url_sonido" value="rsc/gong.wav"
                         placeholder="Ingrese la URL del sonido a reproducir" style="display: none;">
                 </div>
                 <!-- Añadir un checkbox para elegir la vibración -->
                 <div class="form-group">
                     <label>
                         <input type="checkbox" id="vibracionCheckbox" checked> Activar Vibración
+                    </label>&nbsp; &nbsp; &nbsp;
+                    <label>
+                        <input type="checkbox" id="flashCheckbox" checked> Activar Flash de Pantalla
                     </label>
                 </div>
                 <button type="button" class="btn btn-primary" id="startButton" onclick="iniciarTemporizador()">Iniciar
@@ -271,6 +346,7 @@
                     _contador = contador;
                     var url_sonido = $("#url_sonido").val();
                     var vibracionActivada = $("#vibracionCheckbox").prop("checked");
+                    var flashActivado = $("#flashCheckbox").prop("checked");
 
                     index = calculateIndexFromContador(contador, timesToPlaySound);
 
@@ -326,13 +402,13 @@
                         $(".progress-bar").text(progreso.toFixed(2) + "%");
 
                         if (index < patronArray.length && contador == timesToPlaySound[index]) {
-                            reproducirSonidoYVibracion(url_sonido, vibracionActivada);
+                            reproducirSonidoYVibracion(url_sonido, vibracionActivada, flashActivado);
                         }
                         _contador++;
                     } else {
                         if (index < patronArray.length) {
                             // Reproducir el sonido una última vez al final del tiempo
-                            reproducirSonidoYVibracion(url_sonido, vibracionActivada);
+                            reproducirSonidoYVibracion(url_sonido, vibracionActivada, flashActivado);
                         }
                         clearInterval(intervalID);
                         intervalID = null;
@@ -347,7 +423,8 @@
                 intervalID = setInterval(intervalFunction, 1000);
                 var url_sonido = $("#url_sonido").val();
                 var vibracionActivada = $("#vibracionCheckbox").prop("checked");
-                reproducirSonidoYVibracion(url_sonido, vibracionActivada);
+                var flashActivado = $("#flashCheckbox").prop("checked");
+                reproducirSonidoYVibracion(url_sonido, vibracionActivada, flashActivado);
                 intervalFunction();
 
                 $('#startButton').hide();
@@ -400,7 +477,7 @@
             }
         }
 
-        function reproducirSonidoYVibracion(url, vibracionActivada) {
+        function reproducirSonidoYVibracion(url, vibracionActivada, flashActivado) {
             if (url) {
                 var audio = new Audio(url);
                 audio.play();
@@ -409,6 +486,22 @@
             if (vibracionActivada) {
                 navigator.vibrate([700, 300, 700, 300, 700, 300, 700]);
             }
+
+            if (flashActivado) {
+                activarFlashPantalla();
+            }
+        }
+
+        function activarFlashPantalla() {
+            const bodyElement = document.querySelector('body');
+            let flashInterval = setInterval(function () {
+                bodyElement.classList.toggle('dark-mode');
+            }, 150); // Cambia entre modo oscuro y normal cada 300ms
+
+            setTimeout(function () {
+                clearInterval(flashInterval); // Detiene el flasheo después de 3 segundos
+                bodyElement.classList.remove('dark-mode'); // Asegura que vuelve al modo normal al finalizar
+            }, 3000); // Flashea durante 3 segundos
         }
 
         // Handle audio source selection
@@ -423,7 +516,7 @@
             }
         });
 
-      
+
         // Handle pattern selection
         $('#patron_sonido').val($('#patron_sonido_select').val());
         $('#patron_sonido_select').change(function () {
