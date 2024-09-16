@@ -76,6 +76,32 @@
             background-color: #424242;
             color: #ffffff;
         }
+
+        .pattern_name {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        .section_time {
+            width: 12%;
+            min-width: 45px;
+            display: inline-block;
+            margin-right: 10px;
+        }
+
+        .section_description {
+            width: 60%;
+            display: inline-block;
+            margin-right: 10px;
+        }
+
+        #patron {
+            margin: 10px 10px;
+        }
+
+        #botonesTiempo button {
+            font-size: 10px;
+        }
     </style>
 </head>
 
@@ -85,16 +111,14 @@
         <div class="row">
             <div class="col-md-6 col-sm-12">
                 <div class="form-group">
-                    <label for="patron_sonido">Seleccionar o Ingresar Patrón de sonido (minutos):</label>
+                    <label for="patron_sonido">Seleccionar Patrón de sonido:</label>
                     <select class="form-control" id="patron_sonido_select">
                         <option value="" disabled selected>Seleccionar un patrón</option>
-                        <option value="custom">Personalizado (Ingrese un patrón)</option>
+                        <option value="custom">Nuevo patrón</option>
                     </select>
-                    <input type="text" class="form-control" id="patron_sonido"
-                        placeholder="O ingrese un nuevo patrón (e.g., 10,20,30)" style="display: none;">
-                    <!-- Añadimos un enlace para compartir la URL actual, con el query string actual -->
-                    <p><a id="share_link" href="#" style="display: none;">Compartir este patrón</a></p>
+                    <div id="patron" style="display: none;">
 
+                    </div>
                 </div>
                 <div class="form-group">
                     <label for="audio_sonido">Seleccionar o Ingresar Audio a Reproducir:</label>
@@ -127,7 +151,9 @@
                     onclick="reanudarTemporizador()">Reanudar </button>
                 <button type="button" class="btn btn-warning" id="deleteButton" onclick="borrarPatron()">Borrar
                     Patrón</button>
-
+                <label>
+                    <input type="checkbox" id="loop"> Loop
+                </label>
             </div>
         </div>
         <p></p>
@@ -141,7 +167,7 @@
                 </div>
             </div>
         </div>
-        <div class="row" id="botonesTiempo" style="display: none;">
+        <div class="row container" id="botonesTiempo" style="display: none;">
             <div class="col-md-6 col-sm-12">
                 <div class="row">
                     <button class="btn btn-sm btn-secondary col-md-2 col-sm-2 fixed-width"
@@ -166,20 +192,80 @@
                 </div>
             </div>
         </div>
-        <div class="row" id="contador">
+        <div class="row container" id="contador">
             <!-- Contadores se verán verticales en moviles, horizontal en pantallas más grandes -->
             <div id="tiempo_transcurrido" style="display: inline-block;"></div>
             <div id="tiempo_restante" style="display: inline-block;"></div>
             <div id="tiempo_hasta_siguiente_sonido" style="display: inline-block;"></div>
+            <div id="current_section_name" style="display: inline-block;"></div>
+            <p>&nbsp;</p>
         </div>
     </div>
+
+    <!-- template para añadir nueva sección al temporizador. Un campo para el tiempo en minutos y otro campo para la descripción. sin labels, solo placeholdesr -->
+    <template id="t_patron_sonido">
+        <input type="hidden" class="form-control" id="patron_sonido" placeholder="Patrón de sonido">
+    </template>
+
+    <template id="t_pattern_name">
+        <input type="text" class="form-control pattern_name" id="pattern_name" placeholder="Nombre del patrón">
+    </template>
+
+    <template id="t_seccion">
+        <div class="form-group">
+            <input type="number" class="form-control section_time" placeholder="Tiempo (en minutos)">
+            <input type="text" class="form-control section_description" placeholder="Descripción">
+            <button type="button" class="btn btn-danger" onclick="removeSection(this)">X</button>
+        </div>
+    </template>
+
+    <template id="t_add_section">
+        <button type="button" class="btn btn-primary" onclick="addSection()">Añadir Sección</button>
+    </template>
+
+    <template id="t_share_link">
+        <button type="button" class="btn btn-info" onclick="shareLink()">Compartir</button>
+    </template>
 
     <script>
         var url_sonido = "";
         var patron_sonido = "";
         var intervalID = null;
         var pausado = false;
+        var loop = false;
         var getContador = () => 0;
+
+        /**
+         * String pattern may be:
+         * - "10,20,30"
+         * - "name;10,20,30"
+         * - "10:description,20:description,30:description"
+         * - "name;10:description;20:description;30:description"
+         */
+        function parsePattern(stringPattern) {
+            const defaultPattern = {
+                name: '',
+                sections: []
+            };
+
+            if (!stringPattern) return defaultPattern;
+            stringPattern = (stringPattern.includes(';')) ? stringPattern : `;${stringPattern}`;
+
+            const name = stringPattern.split(';')[0];
+            const sections = stringPattern.split(';').slice(1).join(';').split(',').map(function (entry) {
+                // check if time is integer
+                const time = parseInt(entry.split(':')[0]) || 0;
+                const description = entry.split(':')[1] || '';
+                return { time, description };
+            });
+            return { name, sections };
+        }
+
+        function strinfigyPattern(pattern) {
+            return ((pattern.name) ? pattern.name + ';' : '') + pattern.sections.map(function (section) {
+                return section.time + (section.description ? ':' + section.description : '');
+            }).join(',');
+        }
 
         function loadPatternFromQuery() {
             const urlParams = new URLSearchParams(window.location.search);
@@ -199,22 +285,37 @@
             select.empty();
             select.append($('<option value="" disabled selected>Seleccionar un patrón</option>'));
             patterns.forEach(function (pattern) {
+                const patron = parsePattern(pattern);
                 select.append($('<option>', {
                     value: pattern,
-                    text: pattern
+                    text: patron.name || `Sin nombre` + ` (${pattern})`
                 }));
             });
-            select.append($('<option value="custom">Personalizado (Ingrese un patrón)</option>'));
+            select.append($('<option value="custom">Nuevo patrón</option>'));
         }
 
         // Save pattern to LocalStorage
         function savePattern(pattern) {
+            const parsedPattern = parsePattern(pattern);
             var patterns = JSON.parse(localStorage.getItem("patterns")) || [];
-            patterns = [...new Set(patterns)]; // elimina duplicados
-            if (!patterns.includes(pattern)) {
-                patterns.push(pattern);
-                localStorage.setItem("patterns", JSON.stringify(patterns));
+            // buscamos patrones unicos por name o por patron
+            parsedPatterns = patterns.map(parsePattern);
+
+            // actualizamos el patron si ya existe, por name
+            let found = false;
+            for (let i = 0; i < parsedPatterns.length; i++) {
+                if (parsedPatterns[i].name === parsedPattern.name) {
+                    patterns[i] = strinfigyPattern(parsedPattern);
+                    found = true;
+                    break;
+                }
             }
+            if (!found) {
+                // si no existe, lo añadimos
+                patterns.push(strinfigyPattern(parsedPattern));
+            }
+
+            localStorage.setItem("patterns", JSON.stringify(patterns));
             loadPatterns(); // Llama a loadPatterns después de guardar para reflejar los cambios en el select
             $("#patron_sonido_select").val(pattern); // Establece el valor seleccionado en el select
             $("#patron_sonido").val(pattern); // Establece el valor en el campo de texto
@@ -228,9 +329,73 @@
             });
             localStorage.setItem("patterns", JSON.stringify(patterns));
             loadPatterns();
-            $("#patron_sonido").hide();
+            $("#patron").hide();
+
+            // history
+            window.history.replaceState({}, "Temporizador", "/");
+
             calculateSoundMarkers('');
         }
+
+        function addSection() {
+            $section = $("#t_seccion").html();
+            $("#patron .sections").append($section);
+        }
+
+        function removeSection(button) {
+            $(button).parent().remove();
+            onBlur();
+        }
+
+        function showPatronForm(selectedPattern) {
+            const parsedPattern = parsePattern(selectedPattern);
+
+            $("#patron").empty();
+
+            // Add hidden input field for pattern
+            $("#patron").append($("#t_patron_sonido").html());
+            $("#patron_sonido").val(selectedPattern);
+
+            // Add pattern name input field, giving it 
+            $("#patron").append($("#t_pattern_name").html());
+            $("#patron #pattern_name").val(parsedPattern.name);
+
+            // Add section input fields
+            const $sections = $('<div class="sections"></div>');
+            parsedPattern.sections.forEach(function (section) {
+                const $template = $($("#t_seccion").html());
+                $template.find('.section_time').val(section.time);
+                $template.find('.section_description').val(section.description);
+                $sections.append($template);
+            });
+            $("#patron").append($sections);
+
+            // Add "Add Section" button
+            $("#patron").append($("#t_add_section").html());
+
+            // Add "Share Link" button
+            $("#patron").append($("#t_share_link").html());
+
+            $("#patron").show();
+        }
+
+        function onBlur() {
+            const name = $("#patron #pattern_name").val();
+            const sections = [];
+            $("#patron .sections div").each(function () {
+                const time = $(this).find('.section_time').val();
+                const description = $(this).find('.section_description').val();
+                sections.push({ time, description });
+            });
+            const pattern = { name, sections };
+            const stringPattern = strinfigyPattern(pattern);
+            savePattern(stringPattern);
+            window.history.replaceState({}, document.title, "?p=" + stringPattern);
+            calculateSoundMarkers(stringPattern);
+            $("#patron_sonido").val(stringPattern);
+        }
+
+        $("#patron").on("blur", "#pattern_name, .sections .section_time, .sections .section_description", onBlur);
 
         // Load patterns on page load
         $(document).ready(function () {
@@ -240,10 +405,7 @@
 
         // Evaluate pattern entries
         function evaluatePattern(pattern) {
-            var patternArray = pattern.split(',').map(function (entry) {
-                return eval(entry.trim()); // Evaluate each entry as an arithmetic operation
-            });
-            return patternArray.join(',');
+            return strinfigyPattern(parsePattern(pattern));
         }
 
         function calculateIndexFromContador(contador, timesToPlaySound) {
@@ -258,8 +420,9 @@
 
         function calculatePatronArrayYTiempoTotal(patron_sonido) {
             const timesToPlaySound = [];
-            const patronArray = patron_sonido.split(",").map(Number).map(function (entry) {
-                return entry * 60; // Convert each entry to seconds
+            const parsedPattern = parsePattern(patron_sonido);
+            const patronArray = parsedPattern.sections.map(function (section) {
+                return section.time * 60; // Convert each entry to seconds
             });
             const tiempo_total = patronArray.reduce(function (a, b) {
                 timesToPlaySound.push(a + b);
@@ -269,8 +432,9 @@
         }
 
         let intervalFunction, patronArray, timesToPlaySound, tiempo_total;
-        function iniciarTemporizador() {
+        function iniciarTemporizador(firstSound = true) {
             var selectedPattern = $("#patron_sonido_select").val(); // Get the selected pattern
+            loop = $("#loop").prop("checked");
 
             if (selectedPattern && selectedPattern !== 'custom') {
                 patron_sonido = selectedPattern; // Use the selected pattern
@@ -288,7 +452,7 @@
             patron_sonido = evaluatePattern(patron_sonido); // Evaluate pattern entries
 
             savePattern(patron_sonido); // Save the pattern to LocalStorage
-            $("#patron_sonido").hide(); // Hide the pattern input field
+            // $("#patron").hide(); // Hide the pattern input field
 
             ({ patronArray, tiempo_total, timesToPlaySound } = calculatePatronArrayYTiempoTotal(patron_sonido));
 
@@ -297,6 +461,9 @@
                 var index = 0;
                 getContador = () => _contador;
                 intervalFunction = function (contador = _contador) {
+                    const patron_sonido = evaluatePattern($("#patron_sonido").val());
+                    const parsedPattern = parsePattern(patron_sonido);
+
                     $("#botonesTiempo").show();
                     _contador = contador;
                     var url_sonido = $("#url_sonido").val();
@@ -343,12 +510,18 @@
                         if (tiempoHastaSiguiente) {
                             // usando emojis mostramos el tiempo transcurrido, el tiempo restante total y el tiempo hasta el próximo sonido
                             $("#tiempo_transcurrido").text("⏳ " + tiempoTranscurrido);
-                            $("#tiempo_restante").text("⏲️ " + tiempoRestante);
+                            if (!loop)
+                                $("#tiempo_restante").text("⏲️ " + tiempoRestante);
+                            else 
+                                $("#tiempo_restante").text("");
                             $("#tiempo_hasta_siguiente_sonido").text("🔊 " + tiempoHastaSiguiente);
                         } else {
                             // si no hay un siguiente sonido, solo mostramos el tiempo transcurrido y el tiempo restante total
                             $("#tiempo_transcurrido").text("⏳ " + tiempoTranscurrido);
-                            $("#tiempo_restante").text("⏲️ " + tiempoRestante);
+                            if (!loop)
+                                $("#tiempo_restante").text("⏲️ " + tiempoRestante);
+                            else 
+                                $("#tiempo_restante").text("");
                         }
 
                         var progreso = (contador / tiempo_total) * 100;
@@ -359,6 +532,9 @@
                         if (index < patronArray.length && contador == timesToPlaySound[index]) {
                             reproducirSonidoYVibracion(url_sonido, vibracionActivada, flashActivado);
                         }
+
+                        $("#current_section_name").text(parsedPattern.sections[index].description);
+
                         _contador++;
                     } else {
                         if (index < patronArray.length) {
@@ -372,6 +548,10 @@
                         $('#pauseButton').hide();
                         $('#resumeButton').hide();
                         $('#deleteButton').show();
+
+                        if (loop) {
+                            iniciarTemporizador(false);
+                        }
                     }
                 };
 
@@ -379,7 +559,12 @@
                 var url_sonido = $("#url_sonido").val();
                 var vibracionActivada = $("#vibracionCheckbox").prop("checked");
                 var flashActivado = $("#flashCheckbox").prop("checked");
-                reproducirSonidoYVibracion(url_sonido, vibracionActivada, flashActivado);
+                if (firstSound)
+                    reproducirSonidoYVibracion(url_sonido, vibracionActivada, flashActivado);
+
+                const parsedPattern = parsePattern(patron_sonido);
+                $("#current_section_name").text(parsedPattern.sections[0].description);
+
                 intervalFunction();
 
                 $('#startButton').hide();
@@ -408,6 +593,8 @@
                 $(".progress-bar").attr("aria-valuenow", 0);
                 $(".progress-bar").css("width", "0%");
                 $(".progress-bar").text("0%");
+
+                $("#current_section_name").text("");
             }
         }
 
@@ -443,20 +630,29 @@
             }
 
             if (flashActivado) {
+                stopFlashPantalla();
                 activarFlashPantalla();
             }
         }
 
+        var flashInterval = null, flashTimeout = null;
         function activarFlashPantalla() {
             const bodyElement = document.querySelector('body');
-            let flashInterval = setInterval(function () {
+            flashInterval = setInterval(function () {
                 bodyElement.classList.toggle('dark-mode');
             }, 150); // Cambia entre modo oscuro y normal cada 300ms
 
-            setTimeout(function () {
+            flashTimeout = setTimeout(function () {
                 clearInterval(flashInterval); // Detiene el flasheo después de 3 segundos
                 bodyElement.classList.remove('dark-mode'); // Asegura que vuelve al modo normal al finalizar
             }, 5000); // Flashea durante 3 segundos
+        }
+
+        function stopFlashPantalla() {
+            const bodyElement = document.querySelector('body');
+            bodyElement.classList.remove('dark-mode');
+            clearInterval(flashInterval);
+            clearTimeout(flashTimeout);
         }
 
         // Handle audio source selection
@@ -476,10 +672,10 @@
         $('#patron_sonido').val($('#patron_sonido_select').val());
         $('#patron_sonido_select').change(function () {
             var selectedPattern = $(this).val();
-            if (selectedPattern === 'custom') {
-                $('#patron_sonido').show();
-                return;
-            }
+
+            showPatronForm(selectedPattern);
+
+            if (selectedPattern === 'custom') return;
 
             changePatronSonido(selectedPattern);
 
@@ -558,9 +754,7 @@
             $('#resumeButton').hide();
         });
 
-        $("#share_link").click(function (e) {
-            e.preventDefault();
-
+        function shareLink(e) {
             const patron_sonido = $("#patron_sonido").val();
             changePatronSonido(patron_sonido);
             const url = window.location.href;
@@ -582,33 +776,26 @@
                     console.error('Error al copiar la URL al portapapeles: ', err);
                 });
             }
-        });
+        }
 
-        function changePatronSonido(patron) {
-            window.history.replaceState({}, document.title, "?p=" + patron);
+        function changePatronSonido(stringPatron) {
+            window.history.replaceState({}, document.title, "?p=" + stringPatron);
 
             // añadimos el patron a la lista de patrones, en el antepenúltimo lugar (justo antes de "custom")
             var patterns = JSON.parse(localStorage.getItem("patterns")) || [];
-            patterns.push(patron);
+            patterns.push(stringPatron);
             patterns = [...new Set(patterns)]; // elimina duplicados
             localStorage.setItem("patterns", JSON.stringify(patterns));
             loadPatterns();
 
-            $("#patron_sonido_select").val(patron);
-            $("#patron_sonido").val(patron);
+            $("#patron_sonido_select").val(stringPatron);
+            showPatronForm(stringPatron);
             $("#share_link").attr("href", window.location.href);
-            $("#share_link").show();
-            calculateSoundMarkers(patron);
+            calculateSoundMarkers(stringPatron);
 
-            document.title = "Temporizador (" + patron + ")";
+            const parsedPattern = parsePattern(stringPatron);
+            document.title = "Temporizador :: " + (parsedPattern.name || `Sin nombre (${stringPatron})`);
         }
-
-        $("#patron_sonido").blur(function () {
-            var patron_sonido = $("#patron_sonido").val();
-            if (patron_sonido) {
-                calculateSoundMarkers(patron_sonido);
-            }
-        });
 
         if ('wakeLock' in navigator && 'request' in navigator.wakeLock) {
             navigator.wakeLock.request('screen')
@@ -665,6 +852,10 @@
                     document.exitFullscreen();
                 }
             }
+        });
+
+        $("#loop").change(function () {
+            loop = $(this).prop("checked");
         });
     </script>
 </body>
