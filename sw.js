@@ -6,8 +6,8 @@ const urlsToCache = [
   '/rsc/dim.mp3',  // Asegúrate de incluir todos los recursos necesarios para que la PWA funcione sin conexión.
   '/rsc/gong.wav',
   '/rsc/tibetan.wav',
-  '/icon-192.png',
-  '/icon-512.png'
+  '/rsc/icon-192.png',
+  '/rsc/icon-512.png'
 ];
 
 self.addEventListener('install', function(event) {
