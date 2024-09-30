@@ -858,6 +858,32 @@
         $("#loop").change(function () {
             loop = $(this).prop("checked");
         });
+
+        $(document).ready(function () {
+    // Cargar audios predefinidos al cargar la página
+    $('#audio_sonido_select option').each(function () {
+        var audioSrc = $(this).val();
+        if (audioSrc && audioSrc !== "custom") {
+            preloadAudio(audioSrc);
+        }
+    });
+
+    // Manejar el evento de cambio para audios personalizados
+    $('#url_sonido').on('input', function () {
+        var customAudioSrc = $(this).val();
+        if (customAudioSrc) {
+            preloadAudio(customAudioSrc);
+        }
+    });
+});
+
+// Función para precargar audios
+function preloadAudio(src) {
+    var audio = new Audio();
+    audio.src = src;
+    audio.preload = 'auto';
+}
+        
     </script>
     <script>
   if ('serviceWorker' in navigator) {
