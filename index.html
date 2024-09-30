@@ -12,7 +12,8 @@
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap-theme.min.css">
     <!-- Archivos JS de Bootstrap -->
     <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
-   <link rel="manifest" href="/manifest.json">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="icon" href="/rsc/icon-192.png" type="image/png">
     <style>
         .progress {
             position: relative;
@@ -513,7 +514,7 @@
                             $("#tiempo_transcurrido").text("⏳ " + tiempoTranscurrido);
                             if (!loop)
                                 $("#tiempo_restante").text("⏲️ " + tiempoRestante);
-                            else 
+                            else
                                 $("#tiempo_restante").text("");
                             $("#tiempo_hasta_siguiente_sonido").text("🔊 " + tiempoHastaSiguiente);
                         } else {
@@ -521,7 +522,7 @@
                             $("#tiempo_transcurrido").text("⏳ " + tiempoTranscurrido);
                             if (!loop)
                                 $("#tiempo_restante").text("⏲️ " + tiempoRestante);
-                            else 
+                            else
                                 $("#tiempo_restante").text("");
                         }
 
@@ -860,43 +861,43 @@
         });
 
         $(document).ready(function () {
-    // Cargar audios predefinidos al cargar la página
-    $('#audio_sonido_select option').each(function () {
-        var audioSrc = $(this).val();
-        if (audioSrc && audioSrc !== "custom") {
-            preloadAudio(audioSrc);
-        }
-    });
+            // Cargar audios predefinidos al cargar la página
+            $('#audio_sonido_select option').each(function () {
+                var audioSrc = $(this).val();
+                if (audioSrc && audioSrc !== "custom") {
+                    preloadAudio(audioSrc);
+                }
+            });
 
-    // Manejar el evento de cambio para audios personalizados
-    $('#url_sonido').on('input', function () {
-        var customAudioSrc = $(this).val();
-        if (customAudioSrc) {
-            preloadAudio(customAudioSrc);
-        }
-    });
-});
+            // Manejar el evento de cambio para audios personalizados
+            $('#url_sonido').on('input', function () {
+                var customAudioSrc = $(this).val();
+                if (customAudioSrc) {
+                    preloadAudio(customAudioSrc);
+                }
+            });
+        });
 
-// Función para precargar audios
-function preloadAudio(src) {
-    var audio = new Audio();
-    audio.src = src;
-    audio.preload = 'auto';
-}
-        
+        // Función para precargar audios
+        function preloadAudio(src) {
+            var audio = new Audio();
+            audio.src = src;
+            audio.preload = 'auto';
+        }
+
     </script>
     <script>
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('/sw.js')
-    .then(function(registration) {
-      console.log('Service Worker registrado con éxito:', registration);
-    })
-    .catch(function(error) {
-      console.log('Registro del Service Worker fallido:', error);
-    });
-  }
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js')
+                .then(function (registration) {
+                    console.log('Service Worker registrado con éxito:', registration);
+                })
+                .catch(function (error) {
+                    console.log('Registro del Service Worker fallido:', error);
+                });
+        }
     </script>
-    
+
 </body>
 
 </html>
