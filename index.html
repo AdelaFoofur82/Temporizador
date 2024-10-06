@@ -253,11 +253,11 @@
             if (!stringPattern) return defaultPattern;
             stringPattern = (stringPattern.includes(';')) ? stringPattern : `;${stringPattern}`;
 
-            const name = (stringPattern.split(';')[0] || '')?.replace(/&#44;/g, ',');
+            const name = (stringPattern.split(';')[0] || '')?.replace(/#44;/g, ',');
             const sections = stringPattern.split(';').slice(1).join(';').split(',').map(function (entry) {
                 // check if time is integer
                 const time = parseInt(entry.split(':')[0]) || 0;
-                const description = (entry.split(':')[1] || '').replace(/&#44;/g, ',');
+                const description = (entry.split(':')[1] || '').replace(/#44;/g, ',');
                 return { time, description };
             });
             return { name, sections };
@@ -265,9 +265,9 @@
 
         function strinfigyPattern(pattern) {
             // escape , char on description and pattarn name, with it's html code
-            if (pattern.name) pattern.name = pattern.name.replace(/,/g, '&#44;');
+            if (pattern.name) pattern.name = pattern.name.replace(/,/g, '#44;');
             return ((pattern.name) ? pattern.name + ';' : '') + pattern.sections.map(function (section) {
-                return section.time + (section.description ? ':' + section.description.replace(/,/g, '&#44;') : '');
+                return section.time + (section.description ? ':' + section.description.replace(/,/g, '#44;') : '');
             }).join(',');
         }
 
