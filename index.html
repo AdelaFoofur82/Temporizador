@@ -243,8 +243,18 @@
          * - "name;10,20,30"
          * - "10:description,20:description,30:description"
          * - "name;10:description;20:description;30:description"
+         * in addition to the above, we add the loop, sound, vibration and flash settings to the pattern
+         * - "name;10:description;20:description;30:description#url;vibration;flash;loop"
          */
         function parsePattern(stringPattern) {
+            let stringSettings;
+            let settings = {
+                url: '',
+                vibration: false,
+                flash: false,
+                loop: false
+            };
+
             const defaultPattern = {
                 name: '',
                 sections: []
@@ -254,21 +264,35 @@
             stringPattern = (stringPattern.includes(';')) ? stringPattern : `;${stringPattern}`;
 
             const name = (stringPattern.split(';')[0] || '')?.replace(/·44·/g, ',');
+            [stringPattern, stringSettings] = stringPattern.split('~');
             const sections = stringPattern.split(';').slice(1).join(';').split(',').map(function (entry) {
                 // check if time is integer
                 const time = parseInt(entry.split(':')[0]) || 0;
                 const description = (entry.split(':')[1] || '').replace(/·44·/g, ',');
                 return { time, description };
             });
-            return { name, sections };
+
+            if (stringSettings) {
+                stringSettings = stringSettings.split(';');
+                settings = {
+                    ...settings,
+                    url: stringSettings[0],
+                    vibration: stringSettings[1] === 'true',
+                    flash: stringSettings[2] === 'true',
+                    loop: stringSettings[3] === 'true'
+                }
+            }
+            return { name, sections, settings };
         }
 
-        function strinfigyPattern(pattern) {
+        function stringifyPattern(pattern) {
             // escape , char on description and pattarn name, with it's html code
             if (pattern.name) pattern.name = pattern.name.replace(/,/g, '·44·');
-            return ((pattern.name) ? pattern.name + ';' : '') + pattern.sections.map(function (section) {
+            let ret = ((pattern.name) ? pattern.name + ';' : '') + pattern.sections.map(function (section) {
                 return section.time + (section.description ? ':' + section.description.replace(/,/g, '·44·') : '');
             }).join(',');
+            // we add the loop, sound, vibration and flash settings to the pattern
+            return ret + `~${$("#url_sonido").val()};${$("#vibracionCheckbox").prop("checked")};${$("#flashCheckbox").prop("checked")};${loop}`;
         }
 
         function loadPatternFromQuery() {
@@ -276,6 +300,7 @@
             const patron_sonido = urlParams.get('p');
             if (patron_sonido) {
                 changePatronSonido(patron_sonido);
+                onBlur();
                 return true;
             } else {
                 return false;
@@ -309,14 +334,14 @@
             let found = false;
             for (let i = 0; i < parsedPatterns.length; i++) {
                 if (parsedPatterns[i].name === parsedPattern.name) {
-                    patterns[i] = strinfigyPattern(parsedPattern);
+                    patterns[i] = stringifyPattern(parsedPattern);
                     found = true;
                     break;
                 }
             }
             if (!found) {
                 // si no existe, lo añadimos
-                patterns.push(strinfigyPattern(parsedPattern));
+                patterns.push(stringifyPattern(parsedPattern));
             }
 
             localStorage.setItem("patterns", JSON.stringify(patterns));
@@ -392,7 +417,7 @@
                 sections.push({ time, description });
             });
             const pattern = { name, sections };
-            const stringPattern = strinfigyPattern(pattern);
+            const stringPattern = stringifyPattern(pattern);
             savePattern(stringPattern);
             window.history.replaceState({}, document.title, "?p=" + stringPattern);
             calculateSoundMarkers(stringPattern);
@@ -400,16 +425,18 @@
         }
 
         $("#patron").on("blur", "#pattern_name, .sections .section_time, .sections .section_description", onBlur);
+        $("#vibracionCheckbox, #flashCheckbox, #loop").on("change", onBlur);
 
         // Load patterns on page load
         $(document).ready(function () {
+            $('#url_sonido').val($('#audio_sonido_select').val());
             if (!loadPatternFromQuery())
                 loadPatterns();
         });
 
         // Evaluate pattern entries
         function evaluatePattern(pattern) {
-            return strinfigyPattern(parsePattern(pattern));
+            return stringifyPattern(parsePattern(pattern));
         }
 
         function calculateIndexFromContador(contador, timesToPlaySound) {
@@ -660,7 +687,6 @@
         }
 
         // Handle audio source selection
-        $('#url_sonido').val($('#audio_sonido_select').val());
         $('#audio_sonido_select').change(function () {
             var selectedAudioSource = $(this).val();
             if (selectedAudioSource === 'custom') {
@@ -669,6 +695,7 @@
                 $('#url_sonido').val(selectedAudioSource);
                 $('#url_sonido').hide();
             }
+            onBlur();
         });
 
 
@@ -799,6 +826,28 @@
 
             const parsedPattern = parsePattern(stringPatron);
             document.title = "Temporizador :: " + (parsedPattern.name || `Sin nombre (${stringPatron})`);
+
+            // we set the settings
+            url_sonido = parsedPattern.settings.url;
+            if (url_sonido != '') {
+                // if url_sonido is one of the values of the options of the select, we select it
+                if ($('#audio_sonido_select option[value="' + url_sonido + '"]').length > 0) {
+                    $('#audio_sonido_select').val(url_sonido);
+                    $('#url_sonido').hide();
+                } else {
+                    $('#audio_sonido_select').val('custom');
+                    $('#url_sonido').show();
+                }
+                $('#url_sonido').val(url_sonido);
+            } else {
+                $('#audio_sonido_select').val('');
+                $('#url_sonido').val('');
+                $('#url_sonido').hide();
+            }
+            $("#vibracionCheckbox").prop("checked", parsedPattern.settings.vibration);
+            $("#flashCheckbox").prop("checked", parsedPattern.settings.flash);
+            loop = parsedPattern.settings.loop;
+            $("#loop").prop("checked", loop);
         }
 
         if ('wakeLock' in navigator && 'request' in navigator.wakeLock) {
