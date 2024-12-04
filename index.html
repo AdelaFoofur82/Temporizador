@@ -267,7 +267,7 @@
             [stringPattern, stringSettings] = stringPattern.split('~');
             const sections = stringPattern.split(';').slice(1).join(';').split(',').map(function (entry) {
                 // check if time is integer
-                const time = parseInt(entry.split(':')[0]) || 0;
+                const time = parseFloat(entry.split(':')[0]) || 0;
                 const description = (entry.split(':')[1] || '').replace(/·44·/g, ',');
                 return { time, description };
             });
@@ -292,6 +292,7 @@
                 return section.time + (section.description ? ':' + section.description.replace(/,/g, '·44·') : '');
             }).join(',');
             // we add the loop, sound, vibration and flash settings to the pattern
+            loop = $("#loop").prop("checked");
             return ret + `~${$("#url_sonido").val()};${$("#vibracionCheckbox").prop("checked")};${$("#flashCheckbox").prop("checked")};${loop}`;
         }
 
