@@ -173,6 +173,14 @@
             <div class="col-md-6 col-sm-12">
                 <div class="row">
                     <button class="btn btn-sm btn-secondary col-md-2 col-sm-2 fixed-width"
+                        onclick="atrasarSeccion()">&lt; sección</button>
+                    <button class="btn btn-sm btn-secondary col-md-2 col-sm-2 fixed-width"
+                        onclick="reiniciarSeccion()">reiniciar sección</button>
+                    <button class="btn btn-sm btn-secondary col-md-2 col-sm-2 fixed-width"
+                        onclick="adelantarSeccion()">sección &gt;</button>
+                </div>
+                <div class="row">
+                    <button class="btn btn-sm btn-secondary col-md-2 col-sm-2 fixed-width"
                         onclick="atrasarTiempo(10)">&lt;&lt;&lt;
                         10
                         min</button>
@@ -210,7 +218,7 @@
     </template>
 
     <template id="t_pattern_name">
-        <input type="text" class="form-control pattern_name" id="pattern_name" placeholder="Nombre del patrón">
+        <input type="text" class="form-control pattern_name" id="pattern_name" value="Nombre del patrón">
     </template>
 
     <template id="t_seccion">
@@ -388,7 +396,7 @@
 
             // Add pattern name input field, giving it 
             $("#patron").append($("#t_pattern_name").html());
-            $("#patron #pattern_name").val(parsedPattern.name);
+            $("#patron #pattern_name").val(parsedPattern.name || "Nuevo patrón");
 
             // Add section input fields
             const $sections = $('<div class="sections"></div>');
@@ -492,7 +500,7 @@
                 var _contador = 0;
                 var index = 0;
                 getContador = () => _contador;
-                intervalFunction = function (contador = _contador) {
+                intervalFunction = function (contador = _contador, nosound = false) {
                     const patron_sonido = evaluatePattern($("#patron_sonido").val());
                     const parsedPattern = parsePattern(patron_sonido);
 
@@ -562,10 +570,12 @@
                         $(".progress-bar").text(progreso.toFixed(2) + "%");
 
                         if (index < patronArray.length && contador == timesToPlaySound[index]) {
-                            reproducirSonidoYVibracion(url_sonido, vibracionActivada, flashActivado);
+                            if (!nosound)
+                                reproducirSonidoYVibracion(url_sonido, vibracionActivada, flashActivado);
+                            $("#current_section_name").text(parsedPattern.sections[index + 1]?.description || "");
+                        } else {
+                            $("#current_section_name").text(parsedPattern.sections[index].description);
                         }
-
-                        $("#current_section_name").text(parsedPattern.sections[index].description);
 
                         _contador++;
                     } else {
@@ -891,6 +901,62 @@
                 contador = 0;
             }
             intervalFunction(contador);
+        }
+
+        function atrasarSeccion() {
+            if (!intervalFunction) return; // Si no hay un intervalo, no hay nada que hacer
+
+            if (intervalID === null) {
+                // Timer is not running; start it
+                intervalID = setInterval(intervalFunction, 1000);
+            }
+
+            var contador = getContador();
+            var index = calculateIndexFromContador(contador, timesToPlaySound);
+            if (index > 1) {
+                contador = timesToPlaySound[index - 2];
+            } else if (index == 1) {
+                contador = 0;
+            } else {
+                return;
+            }
+            intervalFunction(contador, true);
+        }
+
+        function reiniciarSeccion() {
+            if (!intervalFunction) return; // Si no hay un intervalo, no hay nada que hacer
+
+            if (intervalID === null) {
+                // Timer is not running; start it
+                intervalID = setInterval(intervalFunction, 1000);
+            }
+
+            var contador = getContador();
+            var index = calculateIndexFromContador(contador, timesToPlaySound);
+            if (index > 0) {
+                contador = timesToPlaySound[index - 1];
+            } else {
+                contador = 0;
+            }
+            intervalFunction(contador, true);
+        }
+
+        function adelantarSeccion() {
+            if (!intervalFunction) return; // Si no hay un intervalo, no hay nada que hacer
+
+            if (intervalID === null) {
+                // Timer is not running; start it
+                intervalID = setInterval(intervalFunction, 1000);
+            }
+
+            var contador = getContador();
+            var index = calculateIndexFromContador(contador, timesToPlaySound);
+            if (index < patronArray.length - 1) {
+                contador = timesToPlaySound[index];
+            } else {
+                return;
+            }
+            intervalFunction(contador, true);
         }
 
         // toggle fullscreen
