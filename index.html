@@ -109,6 +109,125 @@
             height: 30px;
             line-height: 10px;
         }
+
+        .solo-mode-btn {
+            margin-left: 10px;
+        }
+
+        .solo-timer-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: none;
+            background: #000;
+            color: #fff;
+            padding: 2vh 2vw;
+            overflow: hidden;
+        }
+
+        .solo-timer-overlay.active {
+            display: flex;
+            flex-direction: column;
+            align-items: stretch;
+            justify-content: center;
+        }
+
+        .solo-timer-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            gap: 1.6vh;
+            min-height: 0;
+        }
+
+        .solo-main-time {
+            font-family: monospace;
+            font-weight: bold;
+            line-height: 1;
+            letter-spacing: 0.04em;
+            font-size: clamp(52px, 18vw, 220px);
+            max-width: 100%;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .solo-secondary-time {
+            font-family: monospace;
+            font-size: clamp(20px, 5vw, 72px);
+            opacity: 0.95;
+        }
+
+        .solo-section-name {
+            font-size: clamp(18px, 3.5vw, 54px);
+            opacity: 0.9;
+            max-width: 96vw;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .solo-timer-controls {
+            position: absolute;
+            left: 50%;
+            bottom: 2vh;
+            transform: translateX(-50%);
+            width: min(96vw, 1100px);
+            background: rgba(0, 0, 0, 0.65);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+            border-radius: 10px;
+            padding: 10px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }
+
+        .solo-timer-overlay.show-controls .solo-timer-controls {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        @media (hover: hover) and (pointer: fine) {
+            .solo-timer-overlay:hover .solo-timer-controls {
+                opacity: 1;
+                pointer-events: auto;
+            }
+        }
+
+        .solo-controls-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .solo-controls-row .btn {
+            min-width: 120px;
+        }
+
+        .solo-controls-options {
+            margin-bottom: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+        }
+
+        .solo-controls-options label {
+            margin: 0;
+            font-weight: normal;
+        }
+
+        @media (max-width: 767px) {
+            .solo-controls-row .btn {
+                min-width: 0;
+                flex: 1 1 45%;
+            }
+        }
     </style>
 </head>
 
@@ -134,6 +253,7 @@
                         <option value="rsc/dim.mp3" selected>Handpan Dim</option>
                         <option value="rsc/gong.wav">Gong</option>
                         <option value="rsc/tibetan.wav">Cuenco tibetano</option>
+                        <option value="rsc/hotelbell.wav">Campana de hotel</option>
                         <option value="custom">Personalizado (Ingrese una URL)</option>
                     </select>
                     <input type="text" class="form-control" id="url_sonido" value="rsc/gong.wav"
@@ -158,6 +278,8 @@
                     onclick="reanudarTemporizador()">Reanudar </button>
                 <button type="button" class="btn btn-warning" id="deleteButton" onclick="borrarPatron()">Borrar
                     Patrón</button>
+                <button type="button" class="btn btn-primary solo-mode-btn" id="soloTimerButton"
+                    onclick="openSoloTimerMode()">Solo temporizador</button>
                 <label>
                     <input type="checkbox" id="loop"> Loop
                 </label>
@@ -217,6 +339,28 @@
         </div>
     </div>
 
+    <div id="soloTimerOverlay" class="solo-timer-overlay" aria-hidden="true">
+        <div class="solo-timer-content">
+            <div id="solo_tiempo_restante" class="solo-main-time">00:00</div>
+            <div id="solo_tiempo_hasta_siguiente_sonido" class="solo-secondary-time"></div>
+            <div id="solo_current_section_name" class="solo-section-name">&nbsp;</div>
+        </div>
+        <div class="solo-timer-controls" id="soloTimerControls">
+            <div class="solo-controls-options">
+                <label><input type="checkbox" id="solo_show_seconds" checked> Mostrar segundos</label>
+                <label><input type="checkbox" id="solo_show_section" checked> Mostrar sección</label>
+            </div>
+            <div class="solo-controls-row">
+                <button type="button" class="btn btn-primary" id="solo_main_mode_button" onclick="toggleSoloMainTimeMode()">Ver transcurrido</button>
+                <button type="button" class="btn btn-info" id="soloPauseResumeButton" onclick="toggleSoloPauseResume()">Pausar</button>
+                <button type="button" class="btn btn-default" onclick="atrasarSeccion()">Sección anterior</button>
+                <button type="button" class="btn btn-default" onclick="adelantarSeccion()">Sección siguiente</button>
+                <button type="button" class="btn btn-warning" onclick="resetSoloTimer()">Resetear</button>
+                <button type="button" class="btn btn-danger" onclick="closeSoloTimerMode()">Cerrar pantalla completa</button>
+            </div>
+        </div>
+    </div>
+
     <!-- template para añadir nueva sección al temporizador. Un campo para el tiempo en minutos y otro campo para la descripción. sin labels, solo placeholdesr -->
     <template id="t_patron_sonido">
         <input type="hidden" class="form-control" id="patron_sonido" placeholder="Patrón de sonido">
@@ -249,6 +393,153 @@
         var pausado = false;
         var loop = false;
         var getContador = () => 0;
+        var isSoloTimerMode = false;
+        var soloControlsTimeout = null;
+        var lastTimerState = {
+            elapsedSec: 0,
+            remainingSec: 0,
+            untilNextSec: 0,
+            sectionName: ''
+        };
+        var soloMainTimeMode = 'remaining';
+
+        function formatTimeByVisibility(totalSeconds, showSeconds) {
+            const safeSeconds = Math.max(0, Math.floor(totalSeconds || 0));
+            const minutes = Math.floor(safeSeconds / 60);
+            const seconds = safeSeconds % 60;
+            if (!showSeconds) {
+                return `${minutes} min`;
+            }
+            const minutesString = minutes < 10 ? "0" + minutes.toString() : minutes.toString();
+            const secondsString = seconds < 10 ? "0" + seconds.toString() : seconds.toString();
+            return `${minutesString}:${secondsString}`;
+        }
+
+        function isTouchScreen() {
+            return window.matchMedia('(hover: none)').matches || 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        }
+
+        function updateSoloPauseButton() {
+            const isPaused = pausado || intervalID === null;
+            $("#soloPauseResumeButton").text(isPaused ? "Reanudar" : "Pausar");
+        }
+
+        function updateSoloTimerDisplay() {
+            const showSeconds = $("#solo_show_seconds").prop("checked");
+            const showSection = $("#solo_show_section").prop("checked");
+            const isRemainingMode = soloMainTimeMode === 'remaining';
+            const mainSeconds = isRemainingMode ? lastTimerState.remainingSec : lastTimerState.elapsedSec;
+
+            $("#solo_tiempo_restante").text(formatTimeByVisibility(mainSeconds, showSeconds));
+            $("#solo_main_mode_button").text(isRemainingMode ? "Ver transcurrido" : "Ver restante");
+            $("#solo_tiempo_hasta_siguiente_sonido").text(`Siguiente: ${formatTimeByVisibility(lastTimerState.untilNextSec, showSeconds)}`);
+
+            if (showSection) {
+                $("#solo_current_section_name").text(lastTimerState.sectionName || "Sin sección");
+                $("#solo_current_section_name").show();
+            } else {
+                $("#solo_current_section_name").hide();
+            }
+        }
+
+        function updateSoloTimerLayout() {
+            if (!isSoloTimerMode) return;
+            const overlay = document.getElementById('soloTimerOverlay');
+            const width = overlay.clientWidth || window.innerWidth;
+            const height = overlay.clientHeight || window.innerHeight;
+            const base = Math.max(48, Math.min(width * 0.22, height * 0.42));
+            document.querySelector('#solo_tiempo_restante').style.fontSize = `${Math.floor(base)}px`;
+            document.querySelector('#solo_tiempo_hasta_siguiente_sonido').style.fontSize = `${Math.floor(base * 0.28)}px`;
+            document.querySelector('#solo_current_section_name').style.fontSize = `${Math.floor(base * 0.22)}px`;
+        }
+
+        function showSoloControlsTemporarily() {
+            if (!isSoloTimerMode) return;
+            if (!isTouchScreen()) return;
+            const $overlay = $("#soloTimerOverlay");
+            $overlay.addClass("show-controls");
+            clearTimeout(soloControlsTimeout);
+            soloControlsTimeout = setTimeout(function () {
+                $overlay.removeClass("show-controls");
+            }, 3000);
+        }
+
+        async function openSoloTimerMode() {
+            isSoloTimerMode = true;
+            const overlay = document.getElementById('soloTimerOverlay');
+            $("#soloTimerOverlay").addClass("active").attr("aria-hidden", "false");
+            updateSoloTimerDisplay();
+            updateSoloPauseButton();
+            updateSoloTimerLayout();
+
+            if (isTouchScreen()) {
+                showSoloControlsTemporarily();
+            }
+
+            try {
+                if (!document.fullscreenElement && overlay.requestFullscreen) {
+                    await overlay.requestFullscreen();
+                }
+            } catch (error) {
+                console.warn('No se pudo entrar en pantalla completa:', error);
+            }
+        }
+
+        async function closeSoloTimerMode() {
+            isSoloTimerMode = false;
+            clearTimeout(soloControlsTimeout);
+            $("#soloTimerOverlay").removeClass("active show-controls").attr("aria-hidden", "true");
+
+            try {
+                if (document.fullscreenElement && document.exitFullscreen) {
+                    await document.exitFullscreen();
+                }
+            } catch (error) {
+                console.warn('No se pudo salir de pantalla completa:', error);
+            }
+        }
+
+        function toggleSoloPauseResume() {
+            if (intervalID !== null && !pausado) {
+                pausarTemporizador();
+            } else {
+                reanudarTemporizador();
+            }
+            updateSoloPauseButton();
+        }
+
+        function toggleSoloMainTimeMode() {
+            soloMainTimeMode = soloMainTimeMode === 'remaining' ? 'elapsed' : 'remaining';
+            updateSoloTimerDisplay();
+        }
+
+        function resetSoloTimer() {
+            if (!intervalFunction) return;
+            if (intervalID === null) {
+                pausado = false;
+                intervalID = setInterval(intervalFunction, 1000);
+            }
+            intervalFunction(0, true);
+            updateSoloPauseButton();
+        }
+
+        window.addEventListener('resize', updateSoloTimerLayout);
+        document.addEventListener('fullscreenchange', function () {
+            updateSoloTimerLayout();
+            if (isSoloTimerMode && !document.fullscreenElement) {
+                closeSoloTimerMode();
+            }
+        });
+
+        $("#solo_show_seconds, #solo_show_section").on("change", function () {
+            updateSoloTimerDisplay();
+            updateSoloTimerLayout();
+        });
+
+        $("#soloTimerOverlay").on("touchstart click", function (e) {
+            if ($(e.target).closest('#soloTimerControls').length) return;
+            showSoloControlsTemporarily();
+        });
 
         /**
          * String pattern may be:
@@ -514,6 +805,7 @@
                     var url_sonido = $("#url_sonido").val();
                     var vibracionActivada = $("#vibracionCheckbox").prop("checked");
                     var flashActivado = $("#flashCheckbox").prop("checked");
+                    var currentSectionName = '';
 
                     index = calculateIndexFromContador(contador, timesToPlaySound);
 
@@ -577,10 +869,21 @@
                         if (index < patronArray.length && contador == timesToPlaySound[index]) {
                             if (!nosound)
                                 reproducirSonidoYVibracion(url_sonido, vibracionActivada, flashActivado);
-                            $("#current_section_name").text(parsedPattern.sections[index + 1]?.description || "");
+                            currentSectionName = parsedPattern.sections[index + 1]?.description || "";
+                            $("#current_section_name").text(currentSectionName);
                         } else {
-                            $("#current_section_name").text(parsedPattern.sections[index].description);
+                            currentSectionName = parsedPattern.sections[index].description;
+                            $("#current_section_name").text(currentSectionName);
                         }
+
+                        lastTimerState = {
+                            elapsedSec: Math.max(0, contador),
+                            remainingSec: Math.max(0, tiempo_total - contador),
+                            untilNextSec: Math.max(0, tiempoHastaSiguiente || 0),
+                            sectionName: currentSectionName
+                        };
+                        updateSoloTimerDisplay();
+                        updateSoloPauseButton();
 
                         _contador++;
                     } else {
@@ -599,6 +902,15 @@
                         if (loop) {
                             iniciarTemporizador(false);
                         }
+
+                        lastTimerState = {
+                            elapsedSec: 0,
+                            remainingSec: 0,
+                            untilNextSec: 0,
+                            sectionName: ''
+                        };
+                        updateSoloTimerDisplay();
+                        updateSoloPauseButton();
                     }
                 };
 
@@ -618,6 +930,7 @@
                 $('#stopButton').show();
                 $('#pauseButton').show();
                 $('#deleteButton').hide();
+                updateSoloPauseButton();
             } else {
                 alert("Por favor complete todos los campos");
             }
@@ -642,6 +955,14 @@
                 $(".progress-bar").text("0%");
 
                 $("#current_section_name").text("");
+                lastTimerState = {
+                    elapsedSec: 0,
+                    remainingSec: 0,
+                    untilNextSec: 0,
+                    sectionName: ''
+                };
+                updateSoloTimerDisplay();
+                updateSoloPauseButton();
             }
         }
 
@@ -653,6 +974,7 @@
                 $('#pauseButton').hide();
                 $('#stopButton').hide();
                 $('#resumeButton').show();
+                updateSoloPauseButton();
             }
         }
 
@@ -663,6 +985,7 @@
                 $('#pauseButton').show();
                 $('#stopButton').show();
                 $('#resumeButton').hide();
+                updateSoloPauseButton();
             }
         }
 
