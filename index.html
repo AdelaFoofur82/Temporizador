@@ -211,9 +211,9 @@
             justify-content: center;
         }
 
-        .solo-controls-options label {
-            margin: 0;
-            font-weight: normal;
+        .solo-controls-options .btn {
+            min-height: 44px;
+            min-width: 190px;
         }
 
         @media (max-width: 767px) {
@@ -340,10 +340,15 @@
         </div>
         <div class="solo-timer-controls" id="soloTimerControls">
             <div class="solo-controls-options">
-                <label><input type="checkbox" id="solo_show_seconds" checked> Mostrar segundos</label>
-                <label><input type="checkbox" id="solo_show_section" checked> Mostrar sección</label>
-                <label><input type="checkbox" id="solo_show_elapsed"> Mostrar transcurrido</label>
-                <label><input type="checkbox" id="solo_relative_section" checked> Relativo a sección</label>
+                <input type="checkbox" id="solo_show_seconds" checked style="display:none;">
+                <input type="checkbox" id="solo_show_section" checked style="display:none;">
+                <input type="checkbox" id="solo_show_elapsed" style="display:none;">
+                <input type="checkbox" id="solo_relative_section" checked style="display:none;">
+
+                <button type="button" class="btn btn-default active solo-toggle-btn" data-target="#solo_show_seconds" data-on-class="btn-success" data-label="Segundos" aria-pressed="true">Segundos: ON</button>
+                <button type="button" class="btn btn-default active solo-toggle-btn" data-target="#solo_show_section" data-on-class="btn-success" data-label="Sección" aria-pressed="true">Sección: ON</button>
+                <button type="button" class="btn btn-default solo-toggle-btn" data-target="#solo_show_elapsed" data-on-class="btn-success" data-label="Transcurrido" aria-pressed="false">Transcurrido: OFF</button>
+                <button type="button" class="btn btn-default active solo-toggle-btn" data-target="#solo_relative_section" data-on-class="btn-success" data-label="Relativo sección" aria-pressed="true">Relativo sección: ON</button>
             </div>
             <div class="solo-controls-row">
                 <button type="button" class="btn btn-success" id="soloStartButton" onclick="startSoloTimer()">Iniciar</button>
@@ -422,6 +427,23 @@
             $("#soloPauseResumeButton").text(isPaused ? "Reanudar" : "Pausar");
         }
 
+        function syncSoloToggleButtons() {
+            $(".solo-toggle-btn").each(function () {
+                const $btn = $(this);
+                const target = $btn.data("target");
+                const $input = $(target);
+                const isOn = $input.prop("checked");
+                const baseLabel = ($btn.data("label") || $btn.text().split(":")[0] || "").trim();
+                const onClass = $btn.data("onClass") || "btn-success";
+
+                $btn.toggleClass("active", isOn);
+                $btn.attr("aria-pressed", isOn ? "true" : "false");
+                $btn.removeClass("btn-default btn-primary btn-success btn-info btn-warning btn-danger");
+                $btn.addClass(isOn ? onClass : "btn-default");
+                $btn.text(`${baseLabel}: ${isOn ? "ON" : "OFF"}`);
+            });
+        }
+
         function updateSoloStartButton() {
             const isRunning = intervalID !== null;
             const hasTimerFn = typeof intervalFunction === 'function';
@@ -467,6 +489,7 @@
 
             updateSoloTimerLayout();
             updateSoloStartButton();
+            syncSoloToggleButtons();
         }
 
         function fitTextToOverlayWidth(element, overlay, maxSizePx, minSizePx, widthPercent, heightPercent) {
@@ -586,6 +609,12 @@
             updateSoloTimerDisplay();
             updateSoloTimerLayout();
             showSoloControlsTemporarily();
+        });
+
+        $(".solo-toggle-btn").on("click", function () {
+            const target = $(this).data("target");
+            const $input = $(target);
+            $input.prop("checked", !$input.prop("checked")).trigger("change");
         });
 
         $("#soloTimerOverlay").on("mouseenter mousemove mousedown touchstart click", function () {
