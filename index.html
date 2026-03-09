@@ -123,6 +123,7 @@
             color: #fff;
             padding: 2vh 2vw;
             overflow: hidden;
+            transition: background-color 0.08s linear, color 0.08s linear;
         }
 
         .solo-timer-overlay.active {
@@ -148,17 +149,8 @@
             font-weight: bold;
             line-height: 1;
             letter-spacing: 0.04em;
-            font-size: clamp(52px, 18vw, 220px);
             max-width: 100%;
-            overflow: hidden;
-            text-overflow: ellipsis;
             white-space: nowrap;
-        }
-
-        .solo-secondary-time {
-            font-family: monospace;
-            font-size: clamp(20px, 5vw, 72px);
-            opacity: 0.95;
         }
 
         .solo-section-name {
@@ -182,7 +174,7 @@
             padding: 10px;
             opacity: 0;
             pointer-events: none;
-            transition: opacity 0.2s ease;
+            transition: opacity 0.45s ease;
         }
 
         .solo-timer-overlay.show-controls .solo-timer-controls {
@@ -190,11 +182,13 @@
             pointer-events: auto;
         }
 
-        @media (hover: hover) and (pointer: fine) {
-            .solo-timer-overlay:hover .solo-timer-controls {
-                opacity: 1;
-                pointer-events: auto;
-            }
+        .solo-timer-overlay.finished .solo-main-time {
+            color: #ff3b30;
+        }
+
+        .solo-timer-overlay.flash-on {
+            background: #fff;
+            color: #000;
         }
 
         .solo-controls-row {
@@ -342,16 +336,17 @@
     <div id="soloTimerOverlay" class="solo-timer-overlay" aria-hidden="true">
         <div class="solo-timer-content">
             <div id="solo_tiempo_restante" class="solo-main-time">00:00</div>
-            <div id="solo_tiempo_hasta_siguiente_sonido" class="solo-secondary-time"></div>
             <div id="solo_current_section_name" class="solo-section-name">&nbsp;</div>
         </div>
         <div class="solo-timer-controls" id="soloTimerControls">
             <div class="solo-controls-options">
                 <label><input type="checkbox" id="solo_show_seconds" checked> Mostrar segundos</label>
                 <label><input type="checkbox" id="solo_show_section" checked> Mostrar sección</label>
+                <label><input type="checkbox" id="solo_show_elapsed"> Mostrar transcurrido</label>
+                <label><input type="checkbox" id="solo_relative_section" checked> Relativo a sección</label>
             </div>
             <div class="solo-controls-row">
-                <button type="button" class="btn btn-primary" id="solo_main_mode_button" onclick="toggleSoloMainTimeMode()">Ver transcurrido</button>
+                <button type="button" class="btn btn-success" id="soloStartButton" onclick="startSoloTimer()">Iniciar</button>
                 <button type="button" class="btn btn-info" id="soloPauseResumeButton" onclick="toggleSoloPauseResume()">Pausar</button>
                 <button type="button" class="btn btn-default" onclick="atrasarSeccion()">Sección anterior</button>
                 <button type="button" class="btn btn-default" onclick="adelantarSeccion()">Sección siguiente</button>
@@ -395,24 +390,27 @@
         var getContador = () => 0;
         var isSoloTimerMode = false;
         var soloControlsTimeout = null;
+        var soloControlsInactivityMs = 2600;
         var lastTimerState = {
             elapsedSec: 0,
             remainingSec: 0,
-            untilNextSec: 0,
+            elapsedInSectionSec: 0,
+            remainingInSectionSec: 0,
             sectionName: ''
         };
-        var soloMainTimeMode = 'remaining';
 
         function formatTimeByVisibility(totalSeconds, showSeconds) {
             const safeSeconds = Math.max(0, Math.floor(totalSeconds || 0));
-            const minutes = Math.floor(safeSeconds / 60);
+            const hours = Math.floor(safeSeconds / 3600);
+            const minutes = Math.floor((safeSeconds % 3600) / 60);
             const seconds = safeSeconds % 60;
-            if (!showSeconds) {
-                return `${minutes} min`;
-            }
+            const hoursString = hours < 10 ? "0" + hours.toString() : hours.toString();
             const minutesString = minutes < 10 ? "0" + minutes.toString() : minutes.toString();
+            if (!showSeconds) {
+                return `${hoursString}:${minutesString}`;
+            }
             const secondsString = seconds < 10 ? "0" + seconds.toString() : seconds.toString();
-            return `${minutesString}:${secondsString}`;
+            return `${hoursString}:${minutesString}:${secondsString}`;
         }
 
         function isTouchScreen() {
@@ -424,44 +422,90 @@
             $("#soloPauseResumeButton").text(isPaused ? "Reanudar" : "Pausar");
         }
 
+        function updateSoloStartButton() {
+            const isRunning = intervalID !== null;
+            const hasTimerFn = typeof intervalFunction === 'function';
+            if (!hasTimerFn || !isRunning) {
+                $("#soloStartButton").text("Iniciar");
+            } else {
+                $("#soloStartButton").text("Reiniciar");
+            }
+        }
+
+        function setSoloFinishedState(isFinished) {
+            const $overlay = $("#soloTimerOverlay");
+            if (isFinished) {
+                $overlay.addClass("finished");
+            } else {
+                $overlay.removeClass("finished");
+            }
+        }
+
         function updateSoloTimerDisplay() {
             const showSeconds = $("#solo_show_seconds").prop("checked");
             const showSection = $("#solo_show_section").prop("checked");
-            const isRemainingMode = soloMainTimeMode === 'remaining';
-            const mainSeconds = isRemainingMode ? lastTimerState.remainingSec : lastTimerState.elapsedSec;
+            const showElapsed = $("#solo_show_elapsed").prop("checked");
+            const relativeToSection = $("#solo_relative_section").prop("checked");
 
-            $("#solo_tiempo_restante").text(formatTimeByVisibility(mainSeconds, showSeconds));
-            $("#solo_main_mode_button").text(isRemainingMode ? "Ver transcurrido" : "Ver restante");
-            $("#solo_tiempo_hasta_siguiente_sonido").text(`Siguiente: ${formatTimeByVisibility(lastTimerState.untilNextSec, showSeconds)}`);
+            let mainSeconds = 0;
+            if (showElapsed) {
+                mainSeconds = relativeToSection ? lastTimerState.elapsedInSectionSec : lastTimerState.elapsedSec;
+            } else {
+                mainSeconds = relativeToSection ? lastTimerState.remainingInSectionSec : lastTimerState.remainingSec;
+            }
+
+            const $soloTiempoRestante = $("#solo_tiempo_restante");
+
+            if ($soloTiempoRestante.length) $soloTiempoRestante.text(formatTimeByVisibility(mainSeconds, showSeconds));
 
             if (showSection) {
-                $("#solo_current_section_name").text(lastTimerState.sectionName || "Sin sección");
+                $("#solo_current_section_name").text(lastTimerState.sectionName || "");
                 $("#solo_current_section_name").show();
             } else {
                 $("#solo_current_section_name").hide();
+            }
+
+            updateSoloTimerLayout();
+            updateSoloStartButton();
+        }
+
+        function fitTextToOverlayWidth(element, overlay, maxSizePx, minSizePx, widthPercent, heightPercent) {
+            if (!element || !overlay) return;
+            const overlayWidth = overlay.clientWidth || window.innerWidth;
+            const overlayHeight = overlay.clientHeight || window.innerHeight;
+            const maxByHeight = Math.floor(overlayHeight * heightPercent);
+            const maxByWidth = Math.floor((overlayWidth * widthPercent) / Math.max(1, element.textContent.length * 0.68));
+            let fontSize = Math.min(maxSizePx, maxByHeight, maxByWidth);
+            fontSize = Math.max(minSizePx, fontSize);
+
+            element.style.fontSize = `${fontSize}px`;
+            const targetWidth = overlayWidth * widthPercent;
+
+            while (fontSize > minSizePx && element.scrollWidth > targetWidth) {
+                fontSize -= 1;
+                element.style.fontSize = `${fontSize}px`;
             }
         }
 
         function updateSoloTimerLayout() {
             if (!isSoloTimerMode) return;
             const overlay = document.getElementById('soloTimerOverlay');
-            const width = overlay.clientWidth || window.innerWidth;
-            const height = overlay.clientHeight || window.innerHeight;
-            const base = Math.max(48, Math.min(width * 0.22, height * 0.42));
-            document.querySelector('#solo_tiempo_restante').style.fontSize = `${Math.floor(base)}px`;
-            document.querySelector('#solo_tiempo_hasta_siguiente_sonido').style.fontSize = `${Math.floor(base * 0.28)}px`;
-            document.querySelector('#solo_current_section_name').style.fontSize = `${Math.floor(base * 0.22)}px`;
+            if (!overlay) return;
+            const mainEl = document.querySelector('#solo_tiempo_restante');
+            const sectionEl = document.querySelector('#solo_current_section_name');
+
+            fitTextToOverlayWidth(mainEl, overlay, 280, 42, 0.96, 0.42);
+            fitTextToOverlayWidth(sectionEl, overlay, 86, 16, 0.94, 0.16);
         }
 
         function showSoloControlsTemporarily() {
             if (!isSoloTimerMode) return;
-            if (!isTouchScreen()) return;
             const $overlay = $("#soloTimerOverlay");
             $overlay.addClass("show-controls");
             clearTimeout(soloControlsTimeout);
             soloControlsTimeout = setTimeout(function () {
                 $overlay.removeClass("show-controls");
-            }, 3000);
+            }, soloControlsInactivityMs);
         }
 
         async function openSoloTimerMode() {
@@ -471,10 +515,7 @@
             updateSoloTimerDisplay();
             updateSoloPauseButton();
             updateSoloTimerLayout();
-
-            if (isTouchScreen()) {
-                showSoloControlsTemporarily();
-            }
+            showSoloControlsTemporarily();
 
             try {
                 if (!document.fullscreenElement && overlay.requestFullscreen) {
@@ -506,11 +547,19 @@
                 reanudarTemporizador();
             }
             updateSoloPauseButton();
+            updateSoloStartButton();
         }
 
-        function toggleSoloMainTimeMode() {
-            soloMainTimeMode = soloMainTimeMode === 'remaining' ? 'elapsed' : 'remaining';
-            updateSoloTimerDisplay();
+        function startSoloTimer() {
+            if (intervalID !== null) {
+                clearInterval(intervalID);
+                intervalID = null;
+                pausado = false;
+            }
+            iniciarTemporizador();
+            setSoloFinishedState(false);
+            updateSoloStartButton();
+            showSoloControlsTemporarily();
         }
 
         function resetSoloTimer() {
@@ -520,7 +569,9 @@
                 intervalID = setInterval(intervalFunction, 1000);
             }
             intervalFunction(0, true);
+            setSoloFinishedState(false);
             updateSoloPauseButton();
+            updateSoloStartButton();
         }
 
         window.addEventListener('resize', updateSoloTimerLayout);
@@ -531,13 +582,13 @@
             }
         });
 
-        $("#solo_show_seconds, #solo_show_section").on("change", function () {
+        $("#solo_show_seconds, #solo_show_section, #solo_show_elapsed, #solo_relative_section").on("change", function () {
             updateSoloTimerDisplay();
             updateSoloTimerLayout();
+            showSoloControlsTemporarily();
         });
 
-        $("#soloTimerOverlay").on("touchstart click", function (e) {
-            if ($(e.target).closest('#soloTimerControls').length) return;
+        $("#soloTimerOverlay").on("mouseenter mousemove mousedown touchstart click", function () {
             showSoloControlsTemporarily();
         });
 
@@ -806,10 +857,12 @@
                     var vibracionActivada = $("#vibracionCheckbox").prop("checked");
                     var flashActivado = $("#flashCheckbox").prop("checked");
                     var currentSectionName = '';
+                    var currentSectionIndex = 0;
 
                     index = calculateIndexFromContador(contador, timesToPlaySound);
 
                     if (contador <= tiempo_total) {
+                        setSoloFinishedState(false);
                         var minutosTranscurridos = Math.floor(contador / 60);
                         var segundosTranscurridos = contador % 60;
                         var minutosStringTranscurridos = minutosTranscurridos < 10 ? "0" + minutosTranscurridos.toString() : minutosTranscurridos.toString();
@@ -870,20 +923,27 @@
                             if (!nosound)
                                 reproducirSonidoYVibracion(url_sonido, vibracionActivada, flashActivado);
                             currentSectionName = parsedPattern.sections[index + 1]?.description || "";
+                            currentSectionIndex = Math.min(index + 1, patronArray.length - 1);
                             $("#current_section_name").text(currentSectionName);
                         } else {
                             currentSectionName = parsedPattern.sections[index].description;
+                            currentSectionIndex = Math.min(index, patronArray.length - 1);
                             $("#current_section_name").text(currentSectionName);
                         }
+
+                        const sectionStartSec = currentSectionIndex > 0 ? timesToPlaySound[currentSectionIndex - 1] : 0;
+                        const sectionEndSec = timesToPlaySound[currentSectionIndex] || tiempo_total;
 
                         lastTimerState = {
                             elapsedSec: Math.max(0, contador),
                             remainingSec: Math.max(0, tiempo_total - contador),
-                            untilNextSec: Math.max(0, tiempoHastaSiguiente || 0),
+                            elapsedInSectionSec: Math.max(0, contador - sectionStartSec),
+                            remainingInSectionSec: Math.max(0, sectionEndSec - contador),
                             sectionName: currentSectionName
                         };
                         updateSoloTimerDisplay();
                         updateSoloPauseButton();
+                        updateSoloStartButton();
 
                         _contador++;
                     } else {
@@ -903,14 +963,20 @@
                             iniciarTemporizador(false);
                         }
 
+                        if (!loop) {
+                            setSoloFinishedState(true);
+                        }
+
                         lastTimerState = {
                             elapsedSec: 0,
                             remainingSec: 0,
-                            untilNextSec: 0,
+                            elapsedInSectionSec: 0,
+                            remainingInSectionSec: 0,
                             sectionName: ''
                         };
                         updateSoloTimerDisplay();
                         updateSoloPauseButton();
+                        updateSoloStartButton();
                     }
                 };
 
@@ -930,7 +996,9 @@
                 $('#stopButton').show();
                 $('#pauseButton').show();
                 $('#deleteButton').hide();
+                setSoloFinishedState(false);
                 updateSoloPauseButton();
+                updateSoloStartButton();
             } else {
                 alert("Por favor complete todos los campos");
             }
@@ -955,14 +1023,17 @@
                 $(".progress-bar").text("0%");
 
                 $("#current_section_name").text("");
+                setSoloFinishedState(false);
                 lastTimerState = {
                     elapsedSec: 0,
                     remainingSec: 0,
-                    untilNextSec: 0,
+                    elapsedInSectionSec: 0,
+                    remainingInSectionSec: 0,
                     sectionName: ''
                 };
                 updateSoloTimerDisplay();
                 updateSoloPauseButton();
+                updateSoloStartButton();
             }
         }
 
@@ -975,6 +1046,7 @@
                 $('#stopButton').hide();
                 $('#resumeButton').show();
                 updateSoloPauseButton();
+                updateSoloStartButton();
             }
         }
 
@@ -986,6 +1058,7 @@
                 $('#stopButton').show();
                 $('#resumeButton').hide();
                 updateSoloPauseButton();
+                updateSoloStartButton();
             }
         }
 
@@ -1008,19 +1081,30 @@
         var flashInterval = null, flashTimeout = null;
         function activarFlashPantalla() {
             const bodyElement = document.querySelector('body');
+            const overlayElement = document.getElementById('soloTimerOverlay');
             flashInterval = setInterval(function () {
                 bodyElement.classList.toggle('dark-mode');
+                if (isSoloTimerMode && overlayElement) {
+                    overlayElement.classList.toggle('flash-on');
+                }
             }, 150); // Cambia entre modo oscuro y normal cada 300ms
 
             flashTimeout = setTimeout(function () {
                 clearInterval(flashInterval); // Detiene el flasheo después de 3 segundos
                 bodyElement.classList.remove('dark-mode'); // Asegura que vuelve al modo normal al finalizar
+                if (overlayElement) {
+                    overlayElement.classList.remove('flash-on');
+                }
             }, 5000); // Flashea durante 3 segundos
         }
 
         function stopFlashPantalla() {
             const bodyElement = document.querySelector('body');
+            const overlayElement = document.getElementById('soloTimerOverlay');
             bodyElement.classList.remove('dark-mode');
+            if (overlayElement) {
+                overlayElement.classList.remove('flash-on');
+            }
             clearInterval(flashInterval);
             clearTimeout(flashTimeout);
         }
